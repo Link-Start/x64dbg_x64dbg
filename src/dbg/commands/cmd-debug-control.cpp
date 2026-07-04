@@ -416,6 +416,15 @@ bool cbDebugPause(int argc, char* argv[])
         dputs(QT_TRANSLATE_NOOP("DBG", "Program is not running"));
         return false;
     }
+    // After attaching, the active thread is whatever thread reported the last
+    // attach event (usually an idle worker that never wakes up). Target the
+    // main thread instead until a real debug event selects an active thread.
+    if(auto mainThreadId = dbggetattachmainthread())
+    {
+        auto hMainThread = ThreadGetHandle(mainThreadId);
+        if(hMainThread)
+            hActiveThread = hMainThread;
+    }
     // TODO: get suspend count instead, this can be detected
     // Interesting behavior found by JustMagic, if the active thread is suspended pause would fail
     auto previousSuspendCount = SuspendThread(hActiveThread);
@@ -441,7 +450,7 @@ bool cbDebugPause(int argc, char* argv[])
     //WORKAROUND: If a program is stuck in NtUserGetMessage (GetMessage was called), this
     //will send a WM_NULL to stop the waiting. This only works if the message is not filtered.
     //OllyDbg also does this in a similar way.
-    PostThreadMessageA(GetDebugData()->dwThreadId, WM_NULL, 0, 0);
+    PostThreadMessageA(GetThreadId(hActiveThread), WM_NULL, 0, 0);
     if(ResumeThread(hActiveThread) == -1)
     {
         dputs(QT_TRANSLATE_NOOP("DBG", "Error resuming thread"));
